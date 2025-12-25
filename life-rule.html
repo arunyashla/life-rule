@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="manifest" href="manifest.json">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LIFE RULE</title>
+
+<style>
+body{margin:0;font-family:Arial;background:#0b0b0b;color:#f5f5f5}
+header{background:#111;padding:14px;text-align:center;border-bottom:1px solid #222}
+h1{margin:0;font-size:18px;letter-spacing:1px}
+.container{max-width:900px;margin:auto;padding:14px}
+.card{background:#141414;border-radius:10px;padding:14px;margin-bottom:14px;box-shadow:0 0 0 1px #222}
+h2{margin:0 0 10px 0;font-size:15px;color:#d4af37}
+textarea,button,select{width:100%;padding:10px;margin-top:8px;border-radius:6px;border:1px solid #333;background:#0b0b0b;color:#fff}
+button{background:#d4af37;color:#000;font-weight:bold;cursor:pointer}
+ul{list-style:none;padding:0;margin:0}
+li{padding:8px;border-bottom:1px solid #222;display:flex;justify-content:space-between;gap:10px}
+.high{color:#ff6b6b}
+.medium{color:#feca57}
+.low{color:#1dd1a1}
+.timer{font-size:12px;opacity:.85}
+.score{font-size:28px;text-align:center;font-weight:bold}
+.small{font-size:12px;opacity:.7}
+</style>
+</head>
+
+<body>
+
+<header>
+<h1>LIFE RULE</h1>
+</header>
+
+<div class="container">
+
+<div class="card">
+<h2>✍️ Add Task</h2>
+<textarea id="taskInput" placeholder="Example: 5 product shoot and reels"></textarea>
+<button onclick="addTask()">Add Task</button>
+</div>
+
+<div class="card">
+<h2>🔥 Active Signals</h2>
+<ul id="taskList"></ul>
+</div>
+
+<div class="card">
+<h2>🗂️ Archived Tasks</h2>
+<ul id="archiveList"></ul>
+</div>
+
+<div class="card">
+<h2>📊 Signal Score</h2>
+<div id="score" class="score">0</div>
+</div>
+
+</div>
+
+<script>
+const STORAGE_KEY = "lifeRuleData";
+
+const PRIORITY_ORDER = { HIGH:1, MEDIUM:2, LOW:3 };
+
+let data = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
+  score: 0,
+  tasks: [],
+  archive: []
+};
+
+function save(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+function detectPriority(text){
+  text = text.toLowerCase();
+  if(/product|sale|reel|shoot|job|client|business|website|money/.test(text))
+    return {p:"HIGH",c:"high",w:40};
+  if(/edit|learn|health|practice|skill/.test(text))
+    return {p:"MEDIUM",c:"medium",w:20};
+  return {p:"LOW",c:"low",w:5};
+}
+
+function render(){
+  data.tasks.sort((a,b)=>PRIORITY_ORDER[a.p]-PRIORITY_ORDER[b.p]);
+
+  const taskList = document.getElementById("taskList");
+  const archiveList = document.getElementById("archiveList");
+  taskList.innerHTML = "";
+  archiveList.innerHTML = "";
+
+  data.tasks.forEach(t=>{
+    const li = document.createElement("li");
+    li.innerHTML = `
+      <div>
+        <b class="${t.c}">${t.p}</b> – ${t.text}
+        <div class="timer">${t.status}</div>
+      </div>
+      <div>
+        <select onchange="changePriority('${t.id}', this.value)">
+          <option ${t.p==="HIGH"?"selected":""}>HIGH</option>
+          <option ${t.p==="MEDIUM"?"selected":""}>MEDIUM</option>
+          <option ${t.p==="LOW"?"selected":""}>LOW</option>
+        </select>
+        <button onclick="startTask('${t.id}')">Start</button>
+        <button onclick="finishTask('${t.id}')">Finish</button>
+      </div>`;
+    taskList.appendChild(li);
+  });
+
+  data.archive.forEach(t=>{
+    const li = document.createElement("li");
+    li.innerHTML = `
+      <div class="small">${t.text} — ${t.status}</div>
+      <button onclick="restoreTask('${t.id}')">Restore</button>`;
+    archiveList.appendChild(li);
+  });
+
+  document.getElementById("score").innerText = data.score;
+  save();
+}
+
+function addTask(){
+  const txt = document.getElementById("taskInput").value.trim();
+  if(!txt) return;
+
+  const pr = detectPriority(txt);
+  data.tasks.push({
+    id: crypto.randomUUID(),
+    text: txt,
+    p: pr.p,
+    c: pr.c,
+    w: pr.w,
+    startTime: null,
+    status: "Not started"
+  });
+
+  document.getElementById("taskInput").value = "";
+  render();
+}
+
+function startTask(id){
+  const t = data.tasks.find(x=>x.id===id);
+  if(!t) return;
+  t.startTime = Date.now();
+  t.status = "Running…";
+  render();
+}
+
+function finishTask(id){
+  const t = data.tasks.find(x=>x.id===id);
+  if(!t || !t.startTime) return;
+
+  const mins = Math.max(1, Math.round((Date.now() - t.startTime)/60000));
+  t.status = `Done in ${mins} min`;
+  data.score += t.w;
+
+  data.archive.push(t);
+  data.tasks = data.tasks.filter(x=>x.id!==id);
+  render();
+}
+
+function restoreTask(id){
+  const t = data.archive.find(x=>x.id===id);
+  if(!t) return;
+
+  t.startTime = null;
+  t.status = "Restored";
+  data.tasks.push(t);
+  data.archive = data.archive.filter(x=>x.id!==id);
+  render();
+}
+
+function changePriority(id,p){
+  const t = data.tasks.find(x=>x.id===id);
+  if(!t) return;
+  t.p = p;
+  t.c = p==="HIGH"?"high":p==="MEDIUM"?"medium":"low";
+  t.w = p==="HIGH"?40:p==="MEDIUM"?20:5;
+  render();
+}
+
+render();
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("service-worker.js");
+}
+</script>
+</body>
+</html>
